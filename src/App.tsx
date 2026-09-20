@@ -9,8 +9,8 @@ import { AchievementsModal } from './components/AchievementsModal';
 import { SettingsModal } from './components/SettingsModal';
 import { AchievementToast } from './components/AchievementToast';
 import { SeoSection } from './components/SeoSection';
-import { PrivacyModal } from './components/PrivacyModal';
-import { SitemapModal } from './components/SitemapModal';
+import { PrivacyPage } from './pages/PrivacyPage';
+import { SitemapPage } from './pages/SitemapPage';
 import { getSettings, saveSettings, getStatistics, getAchievements, syncAchievementsWithStats } from './utils/storage';
 import type { GameSettings, Achievement, ThemeId, DifficultyConfig } from './types/game';
 import { DIFFICULTY_LIST } from './game/difficulty';
@@ -29,10 +29,43 @@ export function App() {
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [isAchievementsOpen, setIsAchievementsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
-  const [isSitemapOpen, setIsSitemapOpen] = useState(false);
   const [latestAchievement, setLatestAchievement] = useState<Achievement | null>(null);
   const [achievementQueue, setAchievementQueue] = useState<Achievement[]>([]);
+
+  // Navigation Routing State (SPA routing for separate pages)
+  const [currentPath, setCurrentPath] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return window.location.pathname;
+    }
+    return '/';
+  });
+
+  const navigate = useCallback((path: string) => {
+    if (typeof window !== 'undefined') {
+      window.history.pushState({}, '', path);
+      setCurrentPath(path);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    const normalized = currentPath.replace(/\/+$/, '') || '/';
+    if (normalized === '/') {
+      document.title = 'Memory Arena – Free Online Memory Card Game';
+      const canonical = document.querySelector('link[rel="canonical"]');
+      if (canonical) {
+        canonical.setAttribute('href', 'https://memoryarena.netlify.app/');
+      }
+    }
+  }, [currentPath]);
 
   // Screen reader accessible announcements
   const [announcement, setAnnouncement] = useState<string>('');
@@ -75,7 +108,8 @@ export function App() {
     moves,
     matchedPairsCount,
     totalPairs,
-    timer,
+    currentStreak,
+    stopwatch,
     scoreBreakdown,
     mismatchedIndices,
     startNewGame,
@@ -166,9 +200,7 @@ export function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (isPrivacyOpen) setIsPrivacyOpen(false);
-        else if (isSitemapOpen) setIsSitemapOpen(false);
-        else if (isStatsOpen) setIsStatsOpen(false);
+        if (isStatsOpen) setIsStatsOpen(false);
         else if (isAchievementsOpen) setIsAchievementsOpen(false);
         else if (isSettingsOpen) setIsSettingsOpen(false);
         else if (status === 'playing') pauseGame();
@@ -177,10 +209,21 @@ export function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPrivacyOpen, isSitemapOpen, isStatsOpen, isAchievementsOpen, isSettingsOpen, status, pauseGame, resumeGame]);
+  }, [isStatsOpen, isAchievementsOpen, isSettingsOpen, status, pauseGame, resumeGame]);
 
   const dailyInfo = getDailyChallengeInfo();
   const isDailyCompletedToday = Boolean(stats.dailyChallengeCompletions[dailyInfo.dateString]);
+
+  // Route matching for dedicated standalone pages
+  const normalizedPath = currentPath.replace(/\/+$/, '') || '/';
+
+  if (normalizedPath === '/privacy' || normalizedPath === '/privacy.html') {
+    return <PrivacyPage onNavigate={navigate} />;
+  }
+
+  if (normalizedPath === '/sitemap' || normalizedPath === '/sitemap.html') {
+    return <SitemapPage onNavigate={navigate} />;
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-slate-50 via-slate-100 to-indigo-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950/20 text-slate-800 dark:text-slate-100 transition-colors duration-300">
@@ -205,7 +248,7 @@ export function App() {
             </div>
             <div>
               <span className="font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 text-lg sm:text-xl tracking-tight leading-none block">
-                MEMORY MATCH
+                MEMORY ARENA
               </span>
               <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold tracking-wider uppercase block">
                 Free Brain Game
@@ -286,25 +329,27 @@ export function App() {
         {/* Game Mode Selector Bar: Difficulty Pills + Daily Challenge + Themes */}
         <section aria-label="Game Selectors" className="w-full max-w-4xl mx-auto px-2 mb-2">
           <div className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-2xl bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm border border-slate-200/60 dark:border-slate-800">
-            {/* Difficulty Pills */}
-            <div className="flex items-center gap-1 overflow-x-auto py-0.5">
+            {/* Difficulty Selector Pills with Icons */}
+            <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
               {DIFFICULTY_LIST.map((diff) => {
                 const isSelected = gameMode === 'standard' && difficulty.id === diff.id;
+                const iconMap: Record<string, string> = { easy: '⚡', medium: '🎯', hard: '🧠' };
                 return (
                   <button
                     key={diff.id}
                     onClick={() => handleSelectDifficulty(diff)}
                     className={`
-                      px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0
+                      px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5
                       ${
                         isSelected
-                          ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20 scale-[1.02]'
+                          ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-500/25 scale-[1.03]'
                           : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                       }
                     `}
                   >
+                    <span>{iconMap[diff.id] || '🎮'}</span>
                     <span>{diff.name}</span>
-                    <span className={`text-[10px] ml-1 font-normal ${isSelected ? 'text-indigo-200' : 'text-slate-400'}`}>
+                    <span className={`text-[10px] ml-0.5 font-normal ${isSelected ? 'text-indigo-200' : 'text-slate-400'}`}>
                       {diff.rows}×{diff.cols}
                     </span>
                   </button>
@@ -362,12 +407,13 @@ export function App() {
           </div>
         </section>
 
-        {/* Live Game Header (Moves, Time, Pairs, Controls) */}
+        {/* Live Game Header (Moves, Decoupled Stopwatch, Pairs, Streak) */}
         <GameHeader
           moves={moves}
-          formattedTime={timer.formattedTime}
+          stopwatch={stopwatch}
           matchedPairs={matchedPairsCount}
           totalPairs={totalPairs}
+          currentStreak={currentStreak}
           soundEnabled={settings.soundEnabled}
           onToggleSound={() => handleUpdateSettings({ soundEnabled: !settings.soundEnabled })}
           onPause={pauseGame}
@@ -394,7 +440,7 @@ export function App() {
           {/* Creator Profile Branding */}
           <div className="flex flex-col items-center md:items-start gap-1.5">
             <div className="flex items-center gap-2 font-bold text-slate-800 dark:text-slate-200 text-sm">
-              <span>Memory Match Game</span>
+              <span>Memory Arena</span>
               <span className="text-slate-300 dark:text-slate-700">•</span>
               <span className="text-xs font-normal text-slate-500 dark:text-slate-400 flex items-center gap-1">
                 Developed with <Heart className="w-3.5 h-3.5 text-pink-500 fill-pink-500" /> by
@@ -459,13 +505,13 @@ export function App() {
 
         {/* Bottom Legal & Sitemap Navigation */}
         <div className="max-w-5xl mx-auto mt-6 pt-5 border-t border-slate-200/50 dark:border-slate-800/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-400 dark:text-slate-500">
-          <p>© {new Date().getFullYear()} Memory Card Game. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Memory Arena. All rights reserved.</p>
 
           <div className="flex items-center gap-4 font-medium">
             <button
               onClick={() => {
                 soundEngine.playButtonClick();
-                setIsPrivacyOpen(true);
+                navigate('/privacy');
               }}
               className="hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1 transition"
             >
@@ -478,7 +524,7 @@ export function App() {
             <button
               onClick={() => {
                 soundEngine.playButtonClick();
-                setIsSitemapOpen(true);
+                navigate('/sitemap');
               }}
               className="hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1 transition"
             >
@@ -512,7 +558,7 @@ export function App() {
         <ResultsScreen
           scoreBreakdown={scoreBreakdown}
           moves={moves}
-          timeSeconds={timer.seconds}
+          timeSeconds={stopwatch.getSeconds()}
           difficulty={difficulty}
           bestScore={stats.bestScores[difficulty.id] || 0}
           bestTime={stats.bestTimes[difficulty.id] || 0}
@@ -555,16 +601,7 @@ export function App() {
         onUpdateSettings={handleUpdateSettings}
       />
 
-      <PrivacyModal
-        isOpen={isPrivacyOpen}
-        onClose={() => setIsPrivacyOpen(false)}
-      />
 
-      <SitemapModal
-        isOpen={isSitemapOpen}
-        onClose={() => setIsSitemapOpen(false)}
-        onOpenPrivacy={() => setIsPrivacyOpen(true)}
-      />
     </div>
   );
 }

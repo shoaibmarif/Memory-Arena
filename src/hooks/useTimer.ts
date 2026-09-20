@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect } from 'react';
 
 export function formatTime(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
@@ -8,95 +8,105 @@ export function formatTime(totalSeconds: number): string {
   return `${mm}:${ss}`;
 }
 
-export function useTimer() {
-  const [seconds, setSeconds] = useState<number>(0);
-  const [isActive, setIsActive] = useState<boolean>(false);
+export type TimerListener = (formatted: string, seconds: number) => void;
 
-  // High precision timestamp trackers
-  const startTimeRef = useRef<number | null>(null);
-  const accumulatedMsRef = useRef<number>(0);
-  const intervalIdRef = useRef<number | null>(null);
+/**
+ * High-performance stopwatch that decouples the ticking clock from the React tree.
+ * Subscribers (like TimerDisplay) update independently, eliminating unnecessary re-renders of the board.
+ */
+export class StopwatchController {
+  private startTime: number | null = null;
+  private accumulatedMs = 0;
+  private intervalId: number | null = null;
+  private listeners = new Set<TimerListener>();
+  private active = false;
 
-  const start = useCallback(() => {
-    if (startTimeRef.current !== null) return; // Already running
-    startTimeRef.current = Date.now();
-    setIsActive(true);
+  public start = () => {
+    if (this.startTime !== null) return;
+    this.startTime = Date.now();
+    this.active = true;
 
-    intervalIdRef.current = window.setInterval(() => {
-      if (startTimeRef.current !== null) {
-        const currentElapsed = accumulatedMsRef.current + (Date.now() - startTimeRef.current);
-        setSeconds(Math.floor(currentElapsed / 1000));
+    if (this.intervalId === null) {
+      this.intervalId = window.setInterval(() => {
+        const sec = this.getSeconds();
+        const formatted = formatTime(sec);
+        this.listeners.forEach(cb => cb(formatted, sec));
+      }, 500);
+    }
+  };
+
+  public pause = () => {
+    if (this.startTime !== null) {
+      this.accumulatedMs += Date.now() - this.startTime;
+      this.startTime = null;
+    }
+    if (this.intervalId !== null) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+    this.active = false;
+  };
+
+  public resume = () => {
+    if (this.startTime === null && this.accumulatedMs >= 0) {
+      this.startTime = Date.now();
+      this.active = true;
+
+      if (this.intervalId === null) {
+        this.intervalId = window.setInterval(() => {
+          const sec = this.getSeconds();
+          const formatted = formatTime(sec);
+          this.listeners.forEach(cb => cb(formatted, sec));
+        }, 500);
       }
-    }, 200);
-  }, []);
-
-  const pause = useCallback(() => {
-    if (startTimeRef.current !== null) {
-      accumulatedMsRef.current += Date.now() - startTimeRef.current;
-      startTimeRef.current = null;
     }
-    if (intervalIdRef.current !== null) {
-      clearInterval(intervalIdRef.current);
-      intervalIdRef.current = null;
-    }
-    setIsActive(false);
-  }, []);
+  };
 
-  const resume = useCallback(() => {
-    if (startTimeRef.current === null) {
-      startTimeRef.current = Date.now();
-      setIsActive(true);
+  public stop = (): number => {
+    this.pause();
+    return this.getSeconds();
+  };
 
-      intervalIdRef.current = window.setInterval(() => {
-        if (startTimeRef.current !== null) {
-          const currentElapsed = accumulatedMsRef.current + (Date.now() - startTimeRef.current);
-          setSeconds(Math.floor(currentElapsed / 1000));
-        }
-      }, 200);
-    }
-  }, []);
+  public reset = () => {
+    this.pause();
+    this.accumulatedMs = 0;
+    this.startTime = null;
+    this.listeners.forEach(cb => cb('00:00', 0));
+  };
 
-  const stop = useCallback(() => {
-    if (startTimeRef.current !== null) {
-      accumulatedMsRef.current += Date.now() - startTimeRef.current;
-      startTimeRef.current = null;
-    }
-    if (intervalIdRef.current !== null) {
-      clearInterval(intervalIdRef.current);
-      intervalIdRef.current = null;
-    }
-    setIsActive(false);
-    return Math.floor(accumulatedMsRef.current / 1000);
-  }, []);
+  public getSeconds = (): number => {
+    const elapsed = this.accumulatedMs + (this.startTime ? Date.now() - this.startTime : 0);
+    return Math.floor(elapsed / 1000);
+  };
 
-  const reset = useCallback(() => {
-    if (intervalIdRef.current !== null) {
-      clearInterval(intervalIdRef.current);
-      intervalIdRef.current = null;
-    }
-    startTimeRef.current = null;
-    accumulatedMsRef.current = 0;
-    setSeconds(0);
-    setIsActive(false);
-  }, []);
+  public getFormattedTime = (): string => {
+    return formatTime(this.getSeconds());
+  };
 
-  // Cleanup on unmount
+  public get isActive(): boolean {
+    return this.active;
+  }
+
+  public subscribe = (listener: TimerListener): (() => void) => {
+    this.listeners.add(listener);
+    listener(this.getFormattedTime(), this.getSeconds());
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+}
+
+export function useStopwatch() {
+  const stopwatchRef = useRef<StopwatchController | null>(null);
+  if (!stopwatchRef.current) {
+    stopwatchRef.current = new StopwatchController();
+  }
+
   useEffect(() => {
     return () => {
-      if (intervalIdRef.current !== null) {
-        clearInterval(intervalIdRef.current);
-      }
+      stopwatchRef.current?.pause();
     };
   }, []);
 
-  return {
-    seconds,
-    formattedTime: formatTime(seconds),
-    isActive,
-    start,
-    pause,
-    resume,
-    stop,
-    reset,
-  };
+  return stopwatchRef.current;
 }

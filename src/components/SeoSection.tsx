@@ -8,7 +8,7 @@ interface FAQItem {
 
 const FAQS: FAQItem[] = [
   {
-    q: 'How does the Memory Card Game work?',
+    q: 'How does Memory Arena work?',
     a: 'You are presented with a grid of face-down cards. Click or tap any card to flip it over, then choose a second card. If the symbols on both cards match, they stay face-up. If they differ, both cards flip back over. The objective is to match all pairs in the fewest moves and fastest time possible.',
   },
   {
@@ -29,7 +29,7 @@ const FAQS: FAQItem[] = [
   },
 ];
 
-export const SeoSection: React.FC = () => {
+export const SeoSection: React.FC = React.memo(() => {
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
 
   const toggleFaq = (index: number) => {
@@ -159,4 +159,6 @@ export const SeoSection: React.FC = () => {
       </div>
     </section>
   );
-};
+});
+
+SeoSection.displayName = 'SeoSection';

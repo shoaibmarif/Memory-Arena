@@ -5,7 +5,7 @@ import { generateCards } from '../game/cardGenerator';
 import { getDailyChallengeInfo } from '../game/dailyChallenge';
 import { calculateScore } from '../utils/score';
 import { soundEngine } from '../utils/sound';
-import { useTimer } from './useTimer';
+import { useStopwatch } from './useTimer';
 import {
   getStatistics,
   saveStatistics,
@@ -25,7 +25,7 @@ export function useGame({ onAchievementUnlocked, onAnnounce }: UseGameProps = {}
   const [difficulty, setDifficulty] = useState<DifficultyConfig>(DIFFICULTIES.easy);
   const [themeId, setThemeId] = useState<ThemeId>('emoji');
 
-  // Board state - initialize directly so the game is ready on page load
+  // Board state
   const [cards, setCards] = useState<Card[]>(() => {
     return generateCards({
       pairsCount: DIFFICULTIES.easy.pairs,
@@ -37,50 +37,89 @@ export function useGame({ onAchievementUnlocked, onAnnounce }: UseGameProps = {}
   const [matchedIndices, setMatchedIndices] = useState<number[]>([]);
   const [isLocked, setIsLocked] = useState<boolean>(false);
 
-  // Status & gameplay metrics - starts directly in playing state
+  // Status & gameplay metrics
   const [status, setStatus] = useState<GameStatus>('playing');
   const [moves, setMoves] = useState<number>(0);
   const [currentStreak, setCurrentStreak] = useState<number>(0);
   const [maxStreak, setMaxStreak] = useState<number>(0);
   const [scoreBreakdown, setScoreBreakdown] = useState<ScoreBreakdown | null>(null);
 
-  // Timer
-  const timer = useTimer();
+  // Decoupled stopwatch - eliminates timer-driven re-renders across the app
+  const stopwatch = useStopwatch();
 
   // Keep track of timeouts for clean unmounting / restarts
   const lockTimeoutRef = useRef<number | null>(null);
+
+  // Mutable state reference to give handleCardClick a stable identity across renders
+  const stateRef = useRef({
+    status,
+    isLocked,
+    firstFlippedIndex,
+    cards,
+    moves,
+    matchedIndices,
+    currentStreak,
+    maxStreak,
+    difficulty,
+    gameMode,
+    themeId,
+    onAchievementUnlocked,
+    onAnnounce,
+  });
+
+  useEffect(() => {
+    stateRef.current = {
+      status,
+      isLocked,
+      firstFlippedIndex,
+      cards,
+      moves,
+      matchedIndices,
+      currentStreak,
+      maxStreak,
+      difficulty,
+      gameMode,
+      themeId,
+      onAchievementUnlocked,
+      onAnnounce,
+    };
+  });
 
   /**
    * Initializes or restarts the game
    */
   const startNewGame = useCallback((
-    mode: GameMode = gameMode,
-    diff: DifficultyConfig = difficulty,
-    theme: ThemeId = themeId
+    mode?: GameMode,
+    diff?: DifficultyConfig,
+    theme?: ThemeId
   ) => {
+    const nextMode = mode ?? stateRef.current.gameMode;
+    const nextDiff = diff ?? stateRef.current.difficulty;
+    const nextTheme = theme ?? stateRef.current.themeId;
+
     // Clear any active timeouts
     if (lockTimeoutRef.current !== null) {
       clearTimeout(lockTimeoutRef.current);
       lockTimeoutRef.current = null;
     }
 
-    setGameMode(mode);
-    setDifficulty(diff);
-    setThemeId(theme);
+    setGameMode(nextMode);
+    setDifficulty(nextDiff);
+    setThemeId(nextTheme);
 
     let generated: Card[];
-    if (mode === 'daily') {
+    if (nextMode === 'daily') {
       const daily = getDailyChallengeInfo();
       generated = generateCards({
-        pairsCount: diff.pairs,
+        pairsCount: nextDiff.pairs,
         themeId: daily.themeId,
         seed: daily.seed,
       });
       setThemeId(daily.themeId);
     } else {
       generated = generateCards({
-        pairsCount: diff.pairs,
-        themeId: theme,
+        pairsCount: nextDiff.pairs,
+        themeId: nextTheme,
       });
     }
 
@@ -93,26 +132,29 @@ export function useGame({ onAchievementUnlocked, onAnnounce }: UseGameProps = {}
     setCurrentStreak(0);
     setMaxStreak(0);
     setScoreBreakdown(null);
-    timer.reset();
+    stopwatch.reset();
     setStatus('playing');
 
-    onAnnounce?.(`Game started. ${diff.name} difficulty, ${diff.pairs} pairs.`);
-  }, [gameMode, difficulty, themeId, timer, onAnnounce]);
+    stateRef.current.onAnnounce?.(`Game started. ${nextDiff.name} difficulty, ${nextDiff.pairs} pairs.`);
+  }, [stopwatch]);
 
   /**
-   * Card click handler with strict anti-cheating & integrity checks
+   * Card click handler with 100% stable function reference.
+   * Eliminates unnecessary re-renders of cards that didn't change!
    */
   const handleCardClick = useCallback((index: number) => {
+    const s = stateRef.current;
+
     // Guards:
-    if (status !== 'playing') return;
-    if (isLocked) return;
-    if (index === firstFlippedIndex) return; // Cannot click same card twice
-    const card = cards[index];
+    if (s.status !== 'playing') return;
+    if (s.isLocked) return;
+    if (index === s.firstFlippedIndex) return; // Cannot click same card twice
+    const card = s.cards[index];
     if (!card || card.isMatched || card.isFlipped) return; // Cannot click already matched or flipped card
 
-    // Start timer & record game played on the first card flip of the game
-    if (!timer.isActive && moves === 0 && firstFlippedIndex === null) {
-      timer.start();
+    // Start stopwatch & record game played on the first card flip of the game
+    if (!stopwatch.isActive && s.moves === 0 && s.firstFlippedIndex === null) {
+      stopwatch.start();
       const stats = getStatistics();
       stats.gamesPlayed += 1;
       saveStatistics(stats);
@@ -122,7 +164,7 @@ export function useGame({ onAchievementUnlocked, onAnnounce }: UseGameProps = {}
     soundEngine.playCardFlip();
 
     // First card of a turn
-    if (firstFlippedIndex === null) {
+    if (s.firstFlippedIndex === null) {
       setFirstFlippedIndex(index);
       setCards(prev => {
         const next = [...prev];
@@ -133,41 +175,43 @@ export function useGame({ onAchievementUnlocked, onAnnounce }: UseGameProps = {}
     }
 
     // Second card of a turn
+    const firstIdx = s.firstFlippedIndex;
+    const firstCard = s.cards[firstIdx];
+    const isMatch = firstCard.pairId === card.pairId;
+    const newMoves = s.moves + 1;
+
     setCards(prev => {
       const next = [...prev];
       next[index] = { ...next[index], isFlipped: true };
       return next;
     });
 
-    const newMoves = moves + 1;
     setMoves(newMoves);
     setIsLocked(true);
-
-    const firstCard = cards[firstFlippedIndex];
-    const isMatch = firstCard.pairId === card.pairId;
 
     if (isMatch) {
       // Successful match
       soundEngine.playMatch();
-      const newMatched = [...matchedIndices, firstFlippedIndex, index];
+      const newMatched = [...s.matchedIndices, firstIdx, index];
       setMatchedIndices(newMatched);
 
-      const nextStreak = currentStreak + 1;
+      const nextStreak = s.currentStreak + 1;
       setCurrentStreak(nextStreak);
-      if (nextStreak > maxStreak) {
-        setMaxStreak(nextStreak);
+      const newMaxStreak = Math.max(nextStreak, s.maxStreak);
+      if (nextStreak > s.maxStreak) {
+        setMaxStreak(newMaxStreak);
       }
 
       setCards(prev => {
         const next = [...prev];
-        next[firstFlippedIndex] = { ...next[firstFlippedIndex], isMatched: true };
+        next[firstIdx] = { ...next[firstIdx], isMatched: true };
         next[index] = { ...next[index], isMatched: true };
         return next;
       });
 
       const pairsFound = newMatched.length / 2;
-      const totalPairs = difficulty.pairs;
-      onAnnounce?.(`Match found! Pair ${pairsFound} of ${totalPairs}.`);
+      const totalPairs = s.difficulty.pairs;
+      s.onAnnounce?.(`Match found! Pair ${pairsFound} of ${totalPairs}.`);
 
       // Check achievement for match
       const currentAchievements = getAchievements();
@@ -175,11 +219,11 @@ export function useGame({ onAchievementUnlocked, onAnnounce }: UseGameProps = {}
       const unlocked = checkAchievements({
         currentAchievements,
         event: 'card_match',
-        gameMode,
-        difficulty: difficulty.id,
+        gameMode: s.gameMode,
+        difficulty: s.difficulty.id,
         moves: newMoves,
-        timeSeconds: timer.seconds,
-        pairsCount: difficulty.pairs,
+        timeSeconds: stopwatch.getSeconds(),
+        pairsCount: s.difficulty.pairs,
         consecutiveStreakMax: nextStreak,
         stats,
       });
@@ -187,7 +231,7 @@ export function useGame({ onAchievementUnlocked, onAnnounce }: UseGameProps = {}
       if (unlocked.length > 0) {
         saveAchievements(currentAchievements);
         soundEngine.playAchievement();
-        unlocked.forEach(ach => onAchievementUnlocked?.(ach));
+        unlocked.forEach(ach => s.onAchievementUnlocked?.(ach));
       }
 
       // Reset turn pointers
@@ -196,20 +240,20 @@ export function useGame({ onAchievementUnlocked, onAnnounce }: UseGameProps = {}
 
       // Check for Game Completion!
       if (pairsFound === totalPairs) {
-        const finalTime = timer.stop();
+        const finalTime = stopwatch.stop();
         setStatus('completed');
         soundEngine.playVictory();
 
         // Calculate final score
         const currentStats = getStatistics();
-        const bestScoreCurrent = currentStats.bestScores[difficulty.id] || 0;
-        const bestTimeCurrent = currentStats.bestTimes[difficulty.id] || 0;
+        const bestScoreCurrent = currentStats.bestScores[s.difficulty.id] || 0;
+        const bestTimeCurrent = currentStats.bestTimes[s.difficulty.id] || 0;
 
         const breakdown = calculateScore({
-          difficulty,
+          difficulty: s.difficulty,
           moves: newMoves,
           timeSeconds: finalTime,
-          consecutiveStreakMax: Math.max(nextStreak, maxStreak),
+          consecutiveStreakMax: newMaxStreak,
           currentBestScore: bestScoreCurrent,
           currentBestTime: bestTimeCurrent,
         });
@@ -226,18 +270,18 @@ export function useGame({ onAchievementUnlocked, onAnnounce }: UseGameProps = {}
         }
 
         if (breakdown.isNewBestScore) {
-          currentStats.bestScores[difficulty.id] = breakdown.totalScore;
+          currentStats.bestScores[s.difficulty.id] = breakdown.totalScore;
         }
         if (breakdown.isNewBestTime) {
-          currentStats.bestTimes[difficulty.id] = finalTime;
+          currentStats.bestTimes[s.difficulty.id] = finalTime;
         }
-        const currentFewestMoves = currentStats.fewestMoves[difficulty.id] || 0;
+        const currentFewestMoves = currentStats.fewestMoves[s.difficulty.id] || 0;
         if (currentFewestMoves === 0 || newMoves < currentFewestMoves) {
-          currentStats.fewestMoves[difficulty.id] = newMoves;
+          currentStats.fewestMoves[s.difficulty.id] = newMoves;
         }
 
         // Save daily challenge completion if in daily mode
-        if (gameMode === 'daily') {
+        if (s.gameMode === 'daily') {
           const daily = getDailyChallengeInfo();
           currentStats.dailyChallengeCompletions[daily.dateString] = {
             score: breakdown.totalScore,
@@ -253,34 +297,34 @@ export function useGame({ onAchievementUnlocked, onAnnounce }: UseGameProps = {}
         const endAchievements = checkAchievements({
           currentAchievements,
           event: 'game_complete',
-          gameMode,
-          difficulty: difficulty.id,
+          gameMode: s.gameMode,
+          difficulty: s.difficulty.id,
           moves: newMoves,
           timeSeconds: finalTime,
-          pairsCount: difficulty.pairs,
-          consecutiveStreakMax: Math.max(nextStreak, maxStreak),
+          pairsCount: s.difficulty.pairs,
+          consecutiveStreakMax: newMaxStreak,
           stats: currentStats,
         });
 
         if (endAchievements.length > 0) {
           saveAchievements(currentAchievements);
           soundEngine.playAchievement();
-          endAchievements.forEach(ach => onAchievementUnlocked?.(ach));
+          endAchievements.forEach(ach => s.onAchievementUnlocked?.(ach));
         }
 
-        onAnnounce?.(`Game complete! Final Score: ${breakdown.totalScore}. Time: ${finalTime} seconds. Moves: ${newMoves}.`);
+        s.onAnnounce?.(`Game complete! Final Score: ${breakdown.totalScore}. Time: ${finalTime} seconds. Moves: ${newMoves}.`);
       }
     } else {
       // Mismatch
       soundEngine.playMismatch();
       setCurrentStreak(0);
-      setMismatchedIndices([firstFlippedIndex, index]);
+      setMismatchedIndices([firstIdx, index]);
 
       // Keep cards revealed briefly so player can memorize them, then flip back
       lockTimeoutRef.current = window.setTimeout(() => {
         setCards(prev => {
           const next = [...prev];
-          if (next[firstFlippedIndex]) next[firstFlippedIndex] = { ...next[firstFlippedIndex], isFlipped: false };
+          if (next[firstIdx]) next[firstIdx] = { ...next[firstIdx], isFlipped: false };
           if (next[index]) next[index] = { ...next[index], isFlipped: false };
           return next;
         });
@@ -290,54 +334,41 @@ export function useGame({ onAchievementUnlocked, onAnnounce }: UseGameProps = {}
         lockTimeoutRef.current = null;
       }, 900);
     }
-  }, [
-    status,
-    isLocked,
-    firstFlippedIndex,
-    cards,
-    moves,
-    matchedIndices,
-    currentStreak,
-    maxStreak,
-    difficulty,
-    timer,
-    gameMode,
-    onAchievementUnlocked,
-    onAnnounce,
-  ]);
+  }, [stopwatch]);
 
   /**
    * Pause the game
    */
   const pauseGame = useCallback(() => {
-    if (status === 'playing') {
-      timer.pause();
+    if (stateRef.current.status === 'playing') {
+      stopwatch.pause();
       setStatus('paused');
     }
-  }, [status, timer]);
+  }, [stopwatch]);
 
   /**
    * Resume the game
    */
   const resumeGame = useCallback(() => {
-    if (status === 'paused') {
-      timer.resume();
+    if (stateRef.current.status === 'paused') {
+      stopwatch.resume();
       setStatus('playing');
     }
-  }, [status, timer]);
+  }, [stopwatch]);
 
   /**
-   * Reset / restart current game board
+   * Reset current game board
    */
   const quitToMenu = useCallback(() => {
     if (lockTimeoutRef.current !== null) {
       clearTimeout(lockTimeoutRef.current);
       lockTimeoutRef.current = null;
     }
-    startNewGame(gameMode, difficulty, themeId);
-  }, [gameMode, difficulty, themeId, startNewGame]);
+    const s = stateRef.current;
+    startNewGame(s.gameMode, s.difficulty, s.themeId);
+  }, [startNewGame]);
 
-  // Clean up timer/timeout on unmount
+  // Clean up on unmount
   useEffect(() => {
     return () => {
       if (lockTimeoutRef.current !== null) {
@@ -357,7 +388,7 @@ export function useGame({ onAchievementUnlocked, onAnnounce }: UseGameProps = {}
     totalPairs: difficulty.pairs,
     currentStreak,
     maxStreak,
-    timer,
+    stopwatch,
     scoreBreakdown,
     mismatchedIndices,
     startNewGame,

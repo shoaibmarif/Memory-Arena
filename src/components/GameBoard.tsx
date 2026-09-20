@@ -10,7 +10,7 @@ interface GameBoardProps {
   disabled: boolean;
 }
 
-export const GameBoard: React.FC<GameBoardProps> = ({
+export const GameBoard: React.FC<GameBoardProps> = React.memo(({
   cards,
   difficulty,
   mismatchedIndices,
@@ -20,7 +20,7 @@ export const GameBoard: React.FC<GameBoardProps> = ({
   // Determine optimal grid columns and max-width based on difficulty
   const getGridConfig = () => {
     switch (difficulty.id) {
-      case 'easy': // 4x4
+      case 'easy': // 4x4 (16 cards)
         return {
           gridClass: 'grid-cols-4 max-w-md sm:max-w-lg',
           gapClass: 'gap-2.5 sm:gap-3.5',
@@ -50,10 +50,10 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       <div
         className={`
           w-full grid ${gridClass} ${gapClass}
-          p-2 sm:p-4 rounded-2xl sm:rounded-3xl
-          bg-slate-900/5 dark:bg-white/5 backdrop-blur-sm
-          border border-slate-200/50 dark:border-slate-800/80
-          shadow-xl transition-all duration-300
+          p-3 sm:p-5 rounded-3xl
+          bg-white/40 dark:bg-slate-900/40 backdrop-blur-md
+          border border-slate-200/70 dark:border-slate-800/80
+          shadow-2xl shadow-indigo-500/5 transition-all duration-300
         `}
       >
         {cards.map((card, index) => {
@@ -76,4 +76,6 @@ export const GameBoard: React.FC<GameBoardProps> = ({
       </div>
     </div>
   );
-};
+});
+
+GameBoard.displayName = 'GameBoard';

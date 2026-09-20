@@ -60,7 +60,7 @@ export const PrivacyModal: React.FC<PrivacyModalProps> = ({ isOpen, onClose }) =
           <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/40 flex items-start gap-3">
             <Lock className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
             <p className="text-xs text-emerald-900 dark:text-emerald-200 font-medium">
-              <strong>Your privacy is 100% respected.</strong> Memory Card Game operates entirely in your browser with no tracking, no cookies, and zero external server communication.
+              <strong>Your privacy is 100% respected.</strong> Memory Arena operates entirely in your browser with no tracking, no cookies, and zero external server communication.
             </p>
           </div>
 

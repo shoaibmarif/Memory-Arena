@@ -11,18 +11,18 @@ export async function shareScore({
   moves,
   difficultyName,
 }: ShareScoreParams): Promise<{ shared: boolean; method: 'web-share' | 'clipboard' }> {
-  const shareText = `🧠 I scored ${score.toLocaleString()} on ${difficultyName} in Memory Match!
+  const shareText = `🧠 I scored ${score.toLocaleString()} on ${difficultyName} in Memory Arena!
 ⏱️ Time: ${timeFormatted}
 🎯 Moves: ${moves}
 
-Can you beat my score? Play free online!`;
+Can you beat my score? Play free online at https://memoryarena.netlify.app/`;
 
   if (navigator.share) {
     try {
       await navigator.share({
-        title: 'Memory Card Game',
+        title: 'Memory Arena',
         text: shareText,
-        url: window.location.href,
+        url: 'https://memoryarena.netlify.app/',
       });
       return { shared: true, method: 'web-share' };
     } catch (err: unknown) {
