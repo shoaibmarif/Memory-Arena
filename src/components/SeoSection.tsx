@@ -17,7 +17,7 @@ const FAQS: FAQItem[] = [
   },
   {
     q: 'How is the final score calculated?',
-    a: 'Your score rewards matching speed, memory accuracy, and difficulty. It consists of Base Points per pair, a Difficulty Multiplier (up to 3.5× on Expert), a Time Bonus for completing under the target threshold, an Efficiency Bonus for avoiding unnecessary turns, and consecutive match streak bonuses.',
+    a: 'Your score rewards matching speed, memory accuracy, and difficulty. It consists of Base Points per pair, a Difficulty Multiplier (up to 2.2× on Hard), a Time Bonus for completing under the target threshold, an Efficiency Bonus for avoiding unnecessary turns, and consecutive match streak bonuses.',
   },
   {
     q: 'Can I play this game completely offline?',
@@ -80,7 +80,6 @@ export const SeoSection: React.FC = () => {
             <li><strong>Easy (4×4):</strong> 8 pairs (16 cards) — perfect for warming up.</li>
             <li><strong>Medium (4×5):</strong> 10 pairs (20 cards) — balanced challenge.</li>
             <li><strong>Hard (6×6):</strong> 18 pairs (36 cards) — serious memory workout.</li>
-            <li><strong>Expert (8×8):</strong> 32 pairs (64 cards) — ultimate test of endurance.</li>
             <li><strong>Daily Challenge:</strong> Unique layout updated each day with identical cards globally.</li>
           </ul>
         </div>

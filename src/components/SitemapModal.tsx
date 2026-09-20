@@ -63,7 +63,7 @@ export const SitemapModal: React.FC<SitemapModalProps> = ({ isOpen, onClose, onO
               <Layers className="w-4 h-4 text-indigo-500" />
               <h3>Game Modes & Difficulties</h3>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/50 dark:border-slate-700/50">
                 <span className="font-bold text-slate-900 dark:text-white block">Easy Mode</span>
                 <span className="text-[11px] text-slate-400">4 × 4 Grid • 8 Pairs</span>
@@ -75,10 +75,6 @@ export const SitemapModal: React.FC<SitemapModalProps> = ({ isOpen, onClose, onO
               <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/50 dark:border-slate-700/50">
                 <span className="font-bold text-slate-900 dark:text-white block">Hard Mode</span>
                 <span className="text-[11px] text-slate-400">6 × 6 Grid • 18 Pairs</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/50 dark:border-slate-700/50">
-                <span className="font-bold text-slate-900 dark:text-white block">Expert Mode</span>
-                <span className="text-[11px] text-slate-400">8 × 8 Grid • 32 Pairs</span>
               </div>
             </div>
           </div>

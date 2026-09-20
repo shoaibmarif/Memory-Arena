@@ -16,6 +16,7 @@ interface ResultsScreenProps {
   onPlayAgain: () => void;
   onChangeDifficulty: () => void;
   onOpenStats: () => void;
+  onOpenAchievements?: () => void;
 }
 
 export const ResultsScreen: React.FC<ResultsScreenProps> = ({
@@ -28,6 +29,7 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
   onPlayAgain,
   onChangeDifficulty,
   onOpenStats,
+  onOpenAchievements,
 }) => {
   const [shareToast, setShareToast] = useState<string | null>(null);
 
@@ -150,13 +152,14 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
               PLAY AGAIN
             </button>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 onClick={handleShare}
-                className="py-2.5 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 transition"
+                className="py-2.5 px-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center justify-center gap-1 transition"
+                title="Share your score"
               >
                 <Share2 className="w-3.5 h-3.5" />
-                SHARE SCORE
+                <span className="truncate">SHARE</span>
               </button>
 
               <button
@@ -164,10 +167,23 @@ export const ResultsScreen: React.FC<ResultsScreenProps> = ({
                   soundEngine.playButtonClick();
                   onOpenStats();
                 }}
-                className="py-2.5 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 transition"
+                className="py-2.5 px-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center justify-center gap-1 transition"
+                title="View Statistics"
               >
-                <BarChart2 className="w-3.5 h-3.5" />
-                STATISTICS
+                <BarChart2 className="w-3.5 h-3.5 text-indigo-500" />
+                <span className="truncate">STATS</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  soundEngine.playButtonClick();
+                  onOpenAchievements?.();
+                }}
+                className="py-2.5 px-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-200/50 dark:border-amber-800/50 font-bold text-xs flex items-center justify-center gap-1 transition"
+                title="View Badges & Achievements"
+              >
+                <Trophy className="w-3.5 h-3.5 text-amber-500" />
+                <span className="truncate">BADGES</span>
               </button>
             </div>
 

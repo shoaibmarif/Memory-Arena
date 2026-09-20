@@ -11,7 +11,7 @@ import { AchievementToast } from './components/AchievementToast';
 import { SeoSection } from './components/SeoSection';
 import { PrivacyModal } from './components/PrivacyModal';
 import { SitemapModal } from './components/SitemapModal';
-import { getSettings, saveSettings, getStatistics, getAchievements } from './utils/storage';
+import { getSettings, saveSettings, getStatistics, getAchievements, syncAchievementsWithStats } from './utils/storage';
 import type { GameSettings, Achievement, ThemeId, DifficultyConfig } from './types/game';
 import { DIFFICULTY_LIST } from './game/difficulty';
 import { THEMES } from './data/themes';
@@ -32,6 +32,7 @@ export function App() {
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
   const [isSitemapOpen, setIsSitemapOpen] = useState(false);
   const [latestAchievement, setLatestAchievement] = useState<Achievement | null>(null);
+  const [achievementQueue, setAchievementQueue] = useState<Achievement[]>([]);
 
   // Screen reader accessible announcements
   const [announcement, setAnnouncement] = useState<string>('');
@@ -41,8 +42,27 @@ export function App() {
   }, []);
 
   const handleAchievementUnlocked = useCallback((ach: Achievement) => {
-    setLatestAchievement(ach);
+    setAchievementQueue(prev => [...prev, ach]);
     setAchievements(getAchievements());
+  }, []);
+
+  // Process achievement queue one by one for toast notifications
+  useEffect(() => {
+    if (!latestAchievement && achievementQueue.length > 0) {
+      setLatestAchievement(achievementQueue[0]);
+      setAchievementQueue(prev => prev.slice(1));
+    }
+  }, [latestAchievement, achievementQueue]);
+
+  // Initial sync: backfill any achievements based on accumulated stats
+  useEffect(() => {
+    const currentStats = getStatistics();
+    const currentAchievements = getAchievements();
+    const { updatedAchievements, newlyUnlocked } = syncAchievementsWithStats(currentAchievements, currentStats);
+    setAchievements(updatedAchievements);
+    if (newlyUnlocked.length > 0) {
+      setAchievementQueue(prev => [...prev, ...newlyUnlocked]);
+    }
   }, []);
 
   // Initialize Game Hook - starts directly on page load
@@ -96,6 +116,14 @@ export function App() {
       return () => mediaQuery.removeEventListener('change', applyTheme);
     }
   }, [settings.themeMode, settings.soundEnabled]);
+
+  // Keep stats and achievements in sync when a game finishes
+  useEffect(() => {
+    if (status === 'completed') {
+      setStats(getStatistics());
+      setAchievements(getAchievements());
+    }
+  }, [status]);
 
   const isDarkMode =
     settings.themeMode === 'dark' ||
@@ -203,14 +231,18 @@ export function App() {
             <button
               onClick={() => {
                 soundEngine.playButtonClick();
+                setAchievements(getAchievements());
                 setIsAchievementsOpen(true);
               }}
               aria-label="View Achievements"
-              title="Achievements"
+              title="Achievements & Badges"
               className="p-1.5 sm:px-3 sm:py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200/60 dark:border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition"
             >
               <Trophy className="w-4 h-4 text-amber-500" />
               <span className="hidden sm:inline">Badges</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                {achievements.filter(a => Boolean(a.unlockedAt)).length}/{achievements.length}
+              </span>
             </button>
 
             <button
@@ -488,7 +520,14 @@ export function App() {
           onChangeDifficulty={() => {
             quitToMenu();
           }}
-          onOpenStats={() => setIsStatsOpen(true)}
+          onOpenStats={() => {
+            setStats(getStatistics());
+            setIsStatsOpen(true);
+          }}
+          onOpenAchievements={() => {
+            setAchievements(getAchievements());
+            setIsAchievementsOpen(true);
+          }}
         />
       )}
 
@@ -496,13 +535,17 @@ export function App() {
         isOpen={isStatsOpen}
         onClose={() => setIsStatsOpen(false)}
         stats={stats}
-        onReset={() => setStats(getStatistics())}
+        onReset={() => {
+          setStats(getStatistics());
+          setAchievements(getAchievements());
+        }}
       />
 
       <AchievementsModal
         isOpen={isAchievementsOpen}
         onClose={() => setIsAchievementsOpen(false)}
         achievements={achievements}
+        onResetAchievements={() => setAchievements(getAchievements())}
       />
 
       <SettingsModal
