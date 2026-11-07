@@ -1,82 +1,101 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!--seo-head-->
+    <meta name="application-name" content="Memory Arena" />
+    <meta name="apple-mobile-web-app-title" content="Memory Arena" />
+    <meta name="author" content="Shoaib Arif" />
+    <meta name="theme-color" content="#f3f0ff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d0b1f" media="(prefers-color-scheme: dark)" />
+    <meta name="format-detection" content="telephone=no" />
 
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
-  <title>Memory Arena – Free Online Memory Card Game</title>
-  <meta name="description"
-    content="Play Memory Arena, a free online memory card matching game. Match pairs, beat your best time, complete daily challenges, and test your brain on mobile or desktop." />
-  <meta name="keywords"
-    content="memory arena, memory card game, match pairs, brain training, daily memory challenge, free online puzzle game" />
-  <meta name="author" content="Shoaib Arif" />
-  <link rel="canonical" href="https://memoryarena.netlify.app/" />
+    <!-- Google Search shows a favicon only if it is a multiple of 48px (or SVG). -->
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192x192.png" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
 
-  <!-- Open Graph / Facebook -->
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://memoryarena.netlify.app/" />
-  <meta property="og:title" content="Memory Arena – Free Online Memory Card Game" />
-  <meta property="og:description"
-    content="Match pairs, beat your best time, complete daily challenges and train your memory on mobile or desktop." />
-  <meta property="og:image" content="https://memoryarena.netlify.app/og-image.png" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&family=Unbounded:wght@500;600;700;800&display=swap"
+    />
 
-  <!-- Twitter / X -->
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:url" content="https://memoryarena.netlify.app/" />
-  <meta name="twitter:title" content="Memory Arena – Free Online Memory Card Game" />
-  <meta name="twitter:description"
-    content="Match pairs, beat your best time, complete daily challenges and train your memory on mobile or desktop." />
-  <meta name="twitter:image" content="https://memoryarena.netlify.app/og-image.png" />
-
-  <!-- Favicon & Touch Icons (Google Search Console & Browsers) -->
-  <link rel="icon" href="/favicon.ico" sizes="48x48" />
-  <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <link rel="shortcut icon" href="/favicon.ico" />
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-  <link rel="manifest" href="/manifest.json" />
-
-  <meta name="theme-color" content="#4f46e5" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-DNVFWXPXC5"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag() { dataLayer.push(arguments); }
-    gtag('js', new Date());
-
-    gtag('config', 'G-DNVFWXPXC5');
-  </script>
-
-  <!-- Schema.org Structured Data -->
-  <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@type": "WebApplication",
-        "name": "Memory Arena",
-        "url": "https://memoryarena.netlify.app/",
-        "applicationCategory": "GameApplication",
-        "genre": "Brain Game, Puzzle",
-        "operatingSystem": "All",
-        "offers": {
-          "@type": "Offer",
-          "price": "0",
-          "priceCurrency": "USD"
-        },
-        "description": "Play Memory Arena, a free online memory card matching game. Match pairs, beat your best time, complete daily challenges, and test your brain on mobile or desktop."
-      }
+    <!-- Apply the saved theme before first paint to avoid a flash. Dark is the default. -->
+    <script>
+      (function () {
+        try {
+          var s = JSON.parse(localStorage.getItem('memory_arena_settings_v2') || 'null');
+          if (!s) {
+            var old = JSON.parse(localStorage.getItem('memory_game_settings_v1') || '{}');
+            s = { theme: old.themeMode || 'dark' };
+          }
+          var t = s.theme || 'dark';
+          var dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', dark);
+        } catch (e) {}
+      })();
     </script>
-</head>
 
-<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen">
-  <div id="root"></div>
-  <script type="module" src="/src/main.tsx"></script>
-</body>
+    <!-- Consent Mode defaults: analytics on unless the visitor opted out. Ads always off. -->
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      (function () {
+        var optedOut = false;
+        try {
+          optedOut = localStorage.getItem('memoryarena.consent') === 'denied';
+        } catch (e) {}
+        gtag('consent', 'default', {
+          analytics_storage: optedOut ? 'denied' : 'granted',
+          ad_storage: 'denied',
+          ad_user_data: 'denied',
+          ad_personalization: 'denied'
+        });
+      })();
+      gtag('js', new Date());
+    </script>
 
+    <!-- Google Tag Manager -->
+    <script>
+      (function (w, d, s, l, i) {
+        w[l] = w[l] || [];
+        w[l].push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
+        var f = d.getElementsByTagName(s)[0],
+          j = d.createElement(s),
+          dl = l != 'dataLayer' ? '&l=' + l : '';
+        j.async = true;
+        j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+        f.parentNode.insertBefore(j, f);
+      })(window, document, 'script', 'dataLayer', 'GTM-PDVT3M3J');
+    </script>
+    <!-- End Google Tag Manager -->
+  </head>
+  <body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript
+      ><iframe
+        src="https://www.googletagmanager.com/ns.html?id=GTM-PDVT3M3J"
+        height="0"
+        width="0"
+        style="display: none; visibility: hidden"
+      ></iframe
+    ></noscript>
+    <!-- End Google Tag Manager (noscript) -->
+    <div id="root"><!--seo-body--></div>
+    <noscript>
+      <p style="max-width: 40rem; margin: 2rem auto; padding: 0 1rem; font-family: system-ui, sans-serif">
+        Memory Arena is a game and needs JavaScript to play. Please enable JavaScript in your browser.
+      </p>
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

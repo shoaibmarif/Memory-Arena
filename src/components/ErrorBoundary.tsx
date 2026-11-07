@@ -1,54 +1,50 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { RotateCcw } from 'lucide-react';
-
-interface Props {
-  children: ReactNode;
-}
+import React from 'react';
 
 interface State {
-  hasError: boolean;
   error: Error | null;
 }
 
-export class ErrorBoundary extends Component<Props, State> {
-  public state: State = {
-    hasError: false,
-    error: null,
-  };
+const RELOAD_KEY = 'memoryarena.chunk-reload';
 
-  public static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+/**
+ * Catches rendering errors so a problem shows a message instead of a blank page.
+ * After a new deploy, an open tab can ask for page files that no longer exist;
+ * in that case it reloads once to pick up the new version.
+ */
+export class ErrorBoundary extends React.Component<{ children: React.ReactNode; resetKey?: string }, State> {
+  state: State = { error: null };
+
+  static getDerivedStateFromError(error: Error): State {
+    return { error };
   }
 
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('[ErrorBoundary caught an error]:', error, errorInfo);
-  }
-
-  private handleReload = () => {
-    window.location.reload();
-  };
-
-  public render() {
-    if (this.state.hasError) {
-      return (
-        <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
-          <div className="max-w-md w-full p-6 sm:p-8 bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 text-center">
-            <h2 className="text-2xl font-black mb-2">Something went wrong</h2>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mb-6">
-              We encountered an unexpected issue. Don't worry, your statistics are preserved.
-            </p>
-            <button
-              onClick={this.handleReload}
-              className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm flex items-center justify-center gap-2 mx-auto shadow-md transition"
-            >
-              <RotateCcw className="w-4 h-4" />
-              Reload Game
-            </button>
-          </div>
-        </div>
-      );
+  componentDidCatch(error: Error) {
+    const staleChunk = /dynamically imported module|Importing a module script failed|Failed to fetch|ChunkLoadError/i.test(error.message);
+    try {
+      if (staleChunk && !sessionStorage.getItem(RELOAD_KEY)) {
+        sessionStorage.setItem(RELOAD_KEY, '1');
+        window.location.reload();
+      }
+    } catch {
+      // storage blocked: fall through to the message
     }
+  }
 
-    return this.props.children;
+  componentDidUpdate(prev: { resetKey?: string }) {
+    // Navigating to another page clears the error.
+    if (this.state.error && prev.resetKey !== this.props.resetKey) this.setState({ error: null });
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="mx-auto max-w-md py-16 text-center">
+        <h1 className="text-3xl font-bold">Something went wrong</h1>
+        <p className="mt-3 text-ink-2">Sorry about that. Reloading the page usually fixes it, and your progress is safe.</p>
+        <button type="button" className="btn btn-glow mt-6" onClick={() => window.location.reload()}>
+          Reload the page
+        </button>
+      </div>
+    );
   }
 }

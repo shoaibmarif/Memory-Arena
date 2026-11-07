@@ -1,222 +1,76 @@
-import type { GameSettings, GameStats, Achievement } from '../types/game';
-import { INITIAL_ACHIEVEMENTS } from '../data/achievements';
+import { EMPTY_PROFILE, type Profile } from '../game/progress';
+import { LEGACY_DECKS, type DeckId } from '../data/decks';
+import type { SizeId } from '../game/engine';
 
-const STATS_KEY = 'memory_game_statistics_v1';
-const SETTINGS_KEY = 'memory_game_settings_v1';
-const ACHIEVEMENTS_KEY = 'memory_game_achievements_v1';
+const PROFILE_KEY = 'memory_arena_profile_v2';
+const SETTINGS_KEY = 'memory_arena_settings_v2';
+// Saved by the first version of the site.
+const OLD_SETTINGS = 'memory_game_settings_v1';
+const OLD_ACHIEVEMENTS = 'memory_game_achievements_v1';
+const OLD_STATS = 'memory_game_statistics_v1';
 
-export const DEFAULT_STATS: GameStats = {
-  gamesPlayed: 0,
-  gamesCompleted: 0,
-  totalMoves: 0,
-  totalPairsMatched: 0,
-  bestScores: {
-    easy: 0,
-    medium: 0,
-    hard: 0,
-  },
-  bestTimes: {
-    easy: 0,
-    medium: 0,
-    hard: 0,
-  },
-  fewestMoves: {
-    easy: 0,
-    medium: 0,
-    hard: 0,
-  },
-  currentStreak: 0,
-  longestStreak: 0,
-  dailyChallengeCompletions: {},
-};
+export type ThemeMode = 'light' | 'dark' | 'system';
 
-export const DEFAULT_SETTINGS: GameSettings = {
-  soundEnabled: true,
-  themeMode: 'system',
-  cardTheme: 'emoji',
-  reducedMotion: false,
-};
+export interface Settings {
+  sound: boolean;
+  theme: ThemeMode;
+  reducedMotion: boolean;
+  deck: DeckId;
+  size: SizeId;
+}
 
-/**
- * Safely parse JSON from localStorage with fallback
- */
-function safeGetItem<T>(key: string, fallback: T): T {
+export const DEFAULT_SETTINGS: Settings = { sound: true, theme: 'dark', reducedMotion: false, deck: 'animals', size: 'easy' };
+
+function read<T>(key: string): T | null {
   try {
     const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object') {
-      return { ...fallback, ...parsed };
-    }
-    return fallback;
-  } catch (error) {
-    console.warn(`[Storage] Failed to read ${key} from localStorage, resetting to default.`, error);
-    return fallback;
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
   }
 }
 
-/**
- * Safely save JSON to localStorage
- */
-function safeSetItem<T>(key: string, data: T): void {
+function write(key: string, value: unknown) {
   try {
-    localStorage.setItem(key, JSON.stringify(data));
-  } catch (error) {
-    console.warn(`[Storage] Failed to write ${key} to localStorage:`, error);
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // storage full or blocked: progress lasts for this visit only
   }
 }
 
-// Statistics helpers
-export function getStatistics(): GameStats {
-  const stats = safeGetItem<GameStats>(STATS_KEY, DEFAULT_STATS);
-  // Ensure bestScores, bestTimes, fewestMoves have all required difficulty keys
+export function loadSettings(): Settings {
+  const saved = read<Partial<Settings>>(SETTINGS_KEY);
+  if (saved) return { ...DEFAULT_SETTINGS, ...saved };
+  const old = read<{ soundEnabled?: boolean; themeMode?: ThemeMode; cardTheme?: string; reducedMotion?: boolean }>(OLD_SETTINGS);
+  if (!old) return DEFAULT_SETTINGS;
   return {
-    ...stats,
-    bestScores: {
-      easy: stats.bestScores?.easy || 0,
-      medium: stats.bestScores?.medium || 0,
-      hard: stats.bestScores?.hard || 0,
-    },
-    bestTimes: {
-      easy: stats.bestTimes?.easy || 0,
-      medium: stats.bestTimes?.medium || 0,
-      hard: stats.bestTimes?.hard || 0,
-    },
-    fewestMoves: {
-      easy: stats.fewestMoves?.easy || 0,
-      medium: stats.fewestMoves?.medium || 0,
-      hard: stats.fewestMoves?.hard || 0,
-    },
-    dailyChallengeCompletions: stats.dailyChallengeCompletions || {},
+    ...DEFAULT_SETTINGS,
+    sound: old.soundEnabled ?? true,
+    theme: old.themeMode ?? DEFAULT_SETTINGS.theme,
+    reducedMotion: old.reducedMotion ?? false,
+    deck: (old.cardTheme && LEGACY_DECKS[old.cardTheme]) || DEFAULT_SETTINGS.deck,
   };
 }
 
-export function saveStatistics(stats: GameStats): void {
-  safeSetItem(STATS_KEY, stats);
-}
+export const saveSettings = (s: Settings) => write(SETTINGS_KEY, s);
 
-export function resetStatistics(): void {
-  safeSetItem(STATS_KEY, DEFAULT_STATS);
-}
+export function loadProfile(): Profile {
+  const saved = read<Partial<Profile>>(PROFILE_KEY);
+  if (saved) return { ...EMPTY_PROFILE, ...saved, daily: { ...EMPTY_PROFILE.daily, ...saved.daily } };
 
-// Settings helpers
-export function getSettings(): GameSettings {
-  return safeGetItem<GameSettings>(SETTINGS_KEY, DEFAULT_SETTINGS);
-}
-
-export function saveSettings(settings: GameSettings): void {
-  safeSetItem(SETTINGS_KEY, settings);
-}
-
-// Achievements helpers
-export function getAchievements(): Achievement[] {
-  try {
-    const raw = localStorage.getItem(ACHIEVEMENTS_KEY);
-    const parsed: Achievement[] = raw ? JSON.parse(raw) : [];
-    const validParsed = Array.isArray(parsed) ? parsed : [];
-
-    // Return fresh copies to prevent accidental in-memory object mutation
-    return INITIAL_ACHIEVEMENTS.map(initial => {
-      const existing = validParsed.find(a => a.id === initial.id);
-      return {
-        id: initial.id,
-        title: initial.title,
-        description: initial.description,
-        icon: initial.icon,
-        unlockedAt: existing?.unlockedAt || undefined,
-      };
-    });
-  } catch (e) {
-    console.warn('[Storage] Failed to read achievements, resetting.', e);
-    return INITIAL_ACHIEVEMENTS.map(initial => ({ ...initial }));
+  // Bring over what still makes sense from the first version: unlocked
+  // achievements and the number of games played.
+  const profile: Profile = { ...EMPTY_PROFILE, achievements: {} };
+  const oldAch = read<{ id: string; unlockedAt?: string }[]>(OLD_ACHIEVEMENTS);
+  for (const a of oldAch ?? []) if (a.unlockedAt) profile.achievements[a.id] = a.unlockedAt;
+  const oldStats = read<{ gamesPlayed?: number; gamesCompleted?: number; totalPairsMatched?: number }>(OLD_STATS);
+  if (oldStats) {
+    profile.games = oldStats.gamesPlayed ?? 0;
+    profile.wins = oldStats.gamesCompleted ?? 0;
+    profile.pairs = oldStats.totalPairsMatched ?? 0;
   }
+  return profile;
 }
 
-export function saveAchievements(achievements: Achievement[]): void {
-  safeSetItem(ACHIEVEMENTS_KEY, achievements);
-}
-
-export function resetAchievements(): void {
-  try {
-    localStorage.removeItem(ACHIEVEMENTS_KEY);
-  } catch (e) {
-    console.warn('[Storage] Failed to reset achievements:', e);
-  }
-}
-
-/**
- * Synchronizes and backfills any earned achievements based on accumulated statistics.
- * Ensures badges states are always strictly accurate even if earned previously.
- */
-export function syncAchievementsWithStats(achievements: Achievement[], stats: GameStats): {
-  updatedAchievements: Achievement[];
-  newlyUnlocked: Achievement[];
-} {
-  const newlyUnlocked: Achievement[] = [];
-  const nowStr = new Date().toISOString();
-
-  const updatedAchievements = achievements.map(ach => {
-    if (ach.unlockedAt) return ach; // Already unlocked
-
-    let shouldUnlock = false;
-
-    // Check individual criteria against persistent stats
-    switch (ach.id) {
-      case 'first_match':
-        shouldUnlock = stats.totalPairsMatched > 0;
-        break;
-      case 'memory_master':
-        shouldUnlock = Boolean(stats.bestScores.easy && stats.bestScores.easy > 0);
-        break;
-      case 'medium_maestro':
-        shouldUnlock = Boolean(stats.bestScores.medium && stats.bestScores.medium > 0);
-        break;
-      case 'memory_prodigy':
-        shouldUnlock = Boolean(stats.bestScores.hard && stats.bestScores.hard > 0);
-        break;
-      case 'expert_champion':
-        shouldUnlock =
-          Boolean(stats.bestScores.easy && stats.bestScores.easy > 0) &&
-          Boolean(stats.bestScores.medium && stats.bestScores.medium > 0) &&
-          Boolean(stats.bestScores.hard && stats.bestScores.hard > 0);
-        break;
-      case 'speed_runner':
-        shouldUnlock =
-          (stats.bestTimes.easy > 0 && stats.bestTimes.easy < 60) ||
-          (stats.bestTimes.medium > 0 && stats.bestTimes.medium < 60) ||
-          (stats.bestTimes.hard > 0 && stats.bestTimes.hard < 60);
-        break;
-      case 'lightning_fast':
-        shouldUnlock =
-          (stats.bestTimes.easy > 0 && stats.bestTimes.easy < 30) ||
-          (stats.bestTimes.medium > 0 && stats.bestTimes.medium < 30) ||
-          (stats.bestTimes.hard > 0 && stats.bestTimes.hard < 30);
-        break;
-      case 'daily_victor':
-        shouldUnlock = Object.keys(stats.dailyChallengeCompletions || {}).length > 0;
-        break;
-      case 'dedicated_10':
-        shouldUnlock = stats.gamesCompleted >= 10 || stats.gamesPlayed >= 10;
-        break;
-      case 'dedicated_50':
-        shouldUnlock = stats.gamesCompleted >= 50 || stats.gamesPlayed >= 50;
-        break;
-      default:
-        break;
-    }
-
-    if (shouldUnlock) {
-      const unlockedItem = { ...ach, unlockedAt: nowStr };
-      newlyUnlocked.push(unlockedItem);
-      return unlockedItem;
-    }
-
-    return ach;
-  });
-
-  if (newlyUnlocked.length > 0) {
-    saveAchievements(updatedAchievements);
-  }
-
-  return { updatedAchievements, newlyUnlocked };
-}
+export const saveProfile = (p: Profile) => write(PROFILE_KEY, p);
+export const resetProfile = () => write(PROFILE_KEY, EMPTY_PROFILE);
